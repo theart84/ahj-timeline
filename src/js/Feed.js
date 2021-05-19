@@ -2,6 +2,7 @@ import Post from './Post';
 import eventBus from './EventBus';
 import templateEngine from './TemplateEngine';
 import geolocation from './geolocation';
+import Recorder from './Recorder';
 
 export default class Feed {
   constructor(container) {
@@ -22,27 +23,27 @@ export default class Feed {
     });
     this.micElement.addEventListener('click', (event) => {
       if (event.target.classList.contains('input__media')) {
-        this.addAudioPostHandler(event);
+        this.onClickMicHandler(event);
         return;
       }
       if (event.target.classList.contains('stop')) {
-        this.stopAudioPostHandler(event);
+        this.stopHandler('audio');
         return;
       }
       if (event.target.classList.contains('cancel')) {
-        this.cancelAudioPostHandler(event);
+        this.cancelHandler('audio');
       }
     });
     this.videoElement.addEventListener('click', (event) => {
       if (event.target.classList.contains('input__media')) {
-        this.addVideoPostHandler(event);
+        this.onClickVideoHandler(event);
       }
       if (event.target.classList.contains('stop')) {
-        this.stopVideoPostHandler(event);
+        this.stopHandler('video');
         return;
       }
       if (event.target.classList.contains('cancel')) {
-        this.cancelVideoPostHandler(event);
+        this.stopHandler('video');
       }
     });
   }
@@ -62,27 +63,31 @@ export default class Feed {
   }
 
   subscribeOnEvents() {
-    eventBus.subscribe('manual-coords', this.addTextPost, this);
+    eventBus.subscribe('manual-coords', this.addPost, this);
+    eventBus.subscribe('received-link', this.addMediaPost, this);
   }
 
   async addTextPostHandler(event) {
-    try {
-      const coordinates = await geolocation();
-      this.addTextPost(
-        coordinates.coords.latitude,
-        coordinates.coords.longitude,
-        event.target.value
-      );
-    } catch (e) {
-      eventBus.emit('show-modal');
+    const coordinates = await this.coordinates();
+    this.type = 'text';
+    if (coordinates) {
+      this.addPost(coordinates.coords.latitude, coordinates.coords.longitude, event.target.value);
+    } else {
       this.currentValue = event.target.value;
-    } finally {
-      event.target.value = '';
     }
   }
 
-  addTextPost(latitude, longitude, message = this.currentValue) {
-    const newPost = new Post(message, `[${latitude}, ${longitude}]`);
+  async coordinates() {
+    try {
+      return await geolocation();
+    } catch (e) {
+      eventBus.emit('show-modal');
+      return null;
+    }
+  }
+
+  addPost(latitude, longitude, message = this.currentValue) {
+    const newPost = new Post(this.type, message, `[${latitude}, ${longitude}]`);
     this.feedContainer.insertAdjacentElement(
       'afterbegin',
       templateEngine.generate(newPost.markup())
@@ -90,21 +95,32 @@ export default class Feed {
     this.currentValue = null;
   }
 
-  addAudioPostHandler() {
+  async onClickMicHandler() {
     if (
       this.micElement.classList.contains('input__media-audio--active') &&
       this.videoElement.classList.contains('input__media-video--active')
     ) {
       this.videoElement.classList.remove('input__media-video--active');
-      console.log('Video - Rec stop');
-      console.log('Mic - Rec start');
+      this.videoControlsElement.classList.remove('input__media-controls--show');
+      this.videoControlsElement.classList.add('hidden');
+      this.micControlsElement.classList.remove('hidden');
+      setTimeout(() => {
+        this.micControlsElement.classList.add('input__media-controls--show');
+      }, 300);
+      this.recorder.cancelStream();
+      this.recorder = null;
+      this.stopTimer();
+      this.createRecorder('audio');
+      this.startTimer(this.micElement);
       return;
     }
     if (this.micElement.classList.contains('input__media-audio--active')) {
       this.micElement.classList.remove('input__media-audio--active');
       this.micControlsElement.classList.remove('input__media-controls--show');
       this.micControlsElement.classList.add('hidden');
-      console.log('Mic - Rec stop');
+      this.recorder.cancelStream();
+      this.recorder = null;
+      this.stopTimer();
       return;
     }
     this.micElement.classList.add('input__media-audio--active');
@@ -112,10 +128,11 @@ export default class Feed {
     setTimeout(() => {
       this.micControlsElement.classList.add('input__media-controls--show');
     }, 300);
-    console.log('Mic - Rec start');
+    this.createRecorder('audio');
+    this.startTimer(this.micElement);
   }
 
-  addVideoPostHandler() {
+  async onClickVideoHandler() {
     if (
       this.micElement.classList.contains('input__media-audio--active') &&
       this.videoElement.classList.contains('input__media-video--active')
@@ -124,13 +141,25 @@ export default class Feed {
       this.videoElement.classList.remove('input__media-video--active');
       this.videoControlsElement.classList.remove('input__media-controls--show');
       this.videoControlsElement.classList.add('hidden');
-      console.log('Video - Rec stop');
+      this.recorder.cancelStream();
+      this.recorder = null;
+      this.stopTimer();
       return;
     }
     if (this.micElement.classList.contains('input__media-audio--active')) {
+      this.micControlsElement.classList.remove('input__media-controls--show');
+      this.micControlsElement.classList.add('hidden');
+
       this.videoElement.classList.add('input__media-video--active');
-      console.log('Mic - Rec stop');
-      console.log('Video - Rec start');
+      this.videoControlsElement.classList.remove('hidden');
+      setTimeout(() => {
+        this.videoControlsElement.classList.add('input__media-controls--show');
+      }, 300);
+      this.recorder.cancelStream();
+      this.recorder = null;
+      this.stopTimer();
+      this.createRecorder('video');
+      this.startTimer(this.videoElement);
       return;
     }
     this.micElement.classList.add('input__media-audio--active');
@@ -139,23 +168,79 @@ export default class Feed {
     setTimeout(() => {
       this.videoControlsElement.classList.add('input__media-controls--show');
     }, 300);
-    console.log('Video - Rec start');
+    this.createRecorder('video');
+    this.startTimer(this.videoElement);
   }
 
-  stopAudioPostHandler(event) {
-    console.log('stop')
+  stopHandler(type) {
+    if (type === 'audio') {
+      this.recorder.stop();
+      this.stopTimer();
+      this.hideAudioControlElements();
+    } else {
+      this.recorder.stop();
+      this.stopTimer();
+      this.hideVideoControlElements();
+    }
   }
 
-  cancelAudioPostHandler(event) {
-    console.log('cancel')
+  cancelHandler(type) {
+    if (type === 'audio') {
+      this.recorder.cancelStream();
+      this.recorder = null;
+      this.stopTimer();
+      this.hideAudioControlElements();
+    } else {
+      this.recorder.cancelStream();
+      this.recorder = null;
+      this.stopTimer();
+      this.hideVideoControlElements();
+    }
   }
 
-  stopVideoPostHandler(event) {
-    console.log('stop')
+  async addMediaPost(value) {
+    const coordinates = await this.coordinates();
+    this.currentValue = value;
+    if (coordinates) {
+      this.addPost(coordinates.coords.latitude, coordinates.coords.longitude, value);
+    }
   }
 
-  cancelVideoPostHandler(event) {
-    console.log('cancel')
+  hideAudioControlElements() {
+    this.micElement.classList.remove('input__media-audio--active');
+    this.micControlsElement.classList.remove('input__media-controls--show');
+    this.micControlsElement.classList.add('hidden');
+  }
+
+  hideVideoControlElements() {
+    this.micElement.classList.remove('input__media-audio--active');
+    this.videoElement.classList.remove('input__media-video--active');
+    this.videoControlsElement.classList.remove('input__media-controls--show');
+    this.videoControlsElement.classList.add('hidden');
+  }
+
+  async createRecorder(type) {
+    this.type = type;
+    this.recorder = new Recorder(type);
+    await this.recorder.init();
+    this.recorder.start();
+  }
+
+  startTimer(container) {
+    this.timerID = null;
+    const time = container.querySelector('.recording-timeline');
+    const currentTime = Date.now();
+    this.timerID = setInterval(() => {
+      const timeStamp = new Date(Date.now() - currentTime).toTimeString().slice(3, 8);
+      time.textContent = `${timeStamp}`;
+    }, 1000);
+  }
+
+  stopTimer() {
+    this.micElement.querySelector('.recording-timeline').textContent = '00:00';
+    this.videoElement.querySelector('.recording-timeline').textContent = '00:00';
+    clearInterval(this.timerID);
+    this.timerID = null;
   }
 
   markup() {
@@ -227,7 +312,7 @@ export default class Feed {
                       attr: {
                         class: ['recording-timeline'],
                       },
-                      content: '00:05',
+                      content: '00:00',
                     },
                     {
                       type: 'span',
@@ -262,7 +347,7 @@ export default class Feed {
                       attr: {
                         class: ['recording-timeline'],
                       },
-                      content: '00:05',
+                      content: '00:00',
                     },
                     {
                       type: 'span',

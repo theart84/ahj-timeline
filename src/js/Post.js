@@ -1,10 +1,41 @@
 export default class Post {
-  constructor(message, coordinates) {
+  constructor(type, message, coordinates) {
+    this.type = type;
     this.message = message;
     this.coordinates = coordinates;
   }
 
   markup() {
+    let typeContent = {};
+    if (this.type === 'audio') {
+      typeContent = {
+        type: 'audio',
+        attr: {
+          class: ['post__audio'],
+          src: this.message,
+          controls: '',
+        },
+        content: '',
+      };
+    } else if (this.type === 'video') {
+      typeContent = {
+        type: 'video',
+        attr: {
+          class: ['post__video'],
+          src: this.message,
+          controls: '',
+        },
+        content: '',
+      };
+    } else {
+      typeContent = {
+        type: 'div',
+        attr: {
+          class: ['post__text'],
+        },
+        content: this.message,
+      };
+    }
     const sourceDate = new Date();
     const date = `${sourceDate.toLocaleDateString()} ${sourceDate
       .toLocaleTimeString()
@@ -28,13 +59,7 @@ export default class Post {
           attr: {
             class: ['post__body'],
           },
-          content: {
-            type: 'div',
-            attr: {
-              class: ['post__text'],
-            },
-            content: this.message,
-          },
+          content: typeContent,
         },
         {
           type: 'div',

@@ -22,10 +22,10 @@ class EventBus {
   emit(event, args) {
     this.handlers.forEach((topic) => {
       if (topic.event === event) {
-        if (args) {
+        if (Array.isArray(args)) {
           topic.handler.call(null, ...args);
         } else {
-          topic.handler();
+          topic.handler(args);
         }
       }
     });
