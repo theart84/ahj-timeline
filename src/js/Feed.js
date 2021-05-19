@@ -65,6 +65,14 @@ export default class Feed {
   subscribeOnEvents() {
     eventBus.subscribe('manual-coords', this.addPost, this);
     eventBus.subscribe('received-link', this.addMediaPost, this);
+    eventBus.subscribe(
+      'close-modal-info',
+      () => {
+        this.hideAudioControlElements();
+        this.hideVideoControlElements();
+      },
+      this
+    );
   }
 
   async addTextPostHandler(event) {
@@ -75,6 +83,7 @@ export default class Feed {
     } else {
       this.currentValue = event.target.value;
     }
+    event.target.value = '';
   }
 
   async coordinates() {
@@ -110,8 +119,7 @@ export default class Feed {
       this.recorder.cancelStream();
       this.recorder = null;
       this.stopTimer();
-      this.createRecorder('audio');
-      this.startTimer(this.micElement);
+      this.createRecorder('audio', this.micElement);
       return;
     }
     if (this.micElement.classList.contains('input__media-audio--active')) {
@@ -128,8 +136,7 @@ export default class Feed {
     setTimeout(() => {
       this.micControlsElement.classList.add('input__media-controls--show');
     }, 300);
-    this.createRecorder('audio');
-    this.startTimer(this.micElement);
+    this.createRecorder('audio', this.micElement);
   }
 
   async onClickVideoHandler() {
@@ -158,8 +165,7 @@ export default class Feed {
       this.recorder.cancelStream();
       this.recorder = null;
       this.stopTimer();
-      this.createRecorder('video');
-      this.startTimer(this.videoElement);
+      this.createRecorder('video', this.videoElement);
       return;
     }
     this.micElement.classList.add('input__media-audio--active');
@@ -168,8 +174,7 @@ export default class Feed {
     setTimeout(() => {
       this.videoControlsElement.classList.add('input__media-controls--show');
     }, 300);
-    this.createRecorder('video');
-    this.startTimer(this.videoElement);
+    this.createRecorder('video', this.videoElement);
   }
 
   stopHandler(type) {
@@ -219,11 +224,16 @@ export default class Feed {
     this.videoControlsElement.classList.add('hidden');
   }
 
-  async createRecorder(type) {
-    this.type = type;
-    this.recorder = new Recorder(type);
-    await this.recorder.init();
-    this.recorder.start();
+  async createRecorder(type, container) {
+    try {
+      this.type = type;
+      this.recorder = new Recorder(type);
+      await this.recorder.init();
+      this.recorder.start();
+      this.startTimer(container);
+    } catch (e) {
+      eventBus.emit('show-modal-info');
+    }
   }
 
   startTimer(container) {

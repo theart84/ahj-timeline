@@ -9,12 +9,16 @@ export default class Recorder {
   }
 
   async init() {
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: this.type !== 'audio',
-    });
-    this.recorder = new MediaRecorder(this.stream);
-    this.registerEvents();
+    try {
+      this.stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: this.type !== 'audio',
+      });
+      this.recorder = new MediaRecorder(this.stream);
+      this.registerEvents();
+    } catch (e) {
+      console.error(e);
+    }
   }
 
   registerEvents() {

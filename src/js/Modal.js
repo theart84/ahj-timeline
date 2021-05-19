@@ -89,6 +89,13 @@ export default class Modal {
                           },
                           content: '',
                         },
+                        {
+                          type: 'div',
+                          attr: {
+                            class: ['form__hint', 'hidden'],
+                          },
+                          content: '',
+                        },
                       ],
                     },
                   ],
@@ -148,9 +155,20 @@ export default class Modal {
       return;
     }
     const normalizeData = formElement.elements.coordinates.value.split(',');
-    this.modalElement.querySelector('.modal__header').textContent = '';
-    eventBus.emit('manual-coords', [normalizeData[0], normalizeData[1]]);
-    this.close();
+    const coordsIsValid = this.validateInput(formElement.elements.coordinates.value);
+    if (coordsIsValid) {
+      this.hideHint();
+      this.modalElement.querySelector('.modal__header').textContent = '';
+      eventBus.emit('manual-coords', [normalizeData[0], normalizeData[1]]);
+      this.close();
+    } else {
+      this.showHint('Enter the coordinates of the following type: 00.00000, 0.00000');
+    }
+  }
+
+  validateInput(value) {
+    const templateRegExp = /^\[?([-+]?\d{1,2}[.]\d+),\s*([-+]?\d{1,3}[.]\d+)\]?$/gm;
+    return templateRegExp.test(value);
   }
 
   close() {
@@ -164,5 +182,17 @@ export default class Modal {
 
   clearForm() {
     this.formElement.elements.coordinates.value = '';
+  }
+
+  showHint(message) {
+    const hintElement = this.formElement.querySelector('.form__hint');
+    hintElement.textContent = message;
+    hintElement.classList.remove('hidden');
+  }
+
+  hideHint() {
+    const hintElement = this.formElement.querySelector('.form__hint');
+    hintElement.textContent = '';
+    hintElement.classList.add('hidden');
   }
 }
