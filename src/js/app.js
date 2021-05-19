@@ -1,4 +1,4 @@
-import AppController from "./AppController";
+import AppController from './AppController';
 
 const root = document.getElementById('root');
 
